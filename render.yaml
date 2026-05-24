@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: slash-music
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DEEPSEEK_API_KEY
+        value: sk-4014283e7f61424ab5f1562a124283d4
