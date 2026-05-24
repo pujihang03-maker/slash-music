@@ -1,0 +1,28 @@
+#!/bin/bash
+APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+
+# Source shell profile for node
+[ -f ~/.zshrc ] && source ~/.zshrc 2>/dev/null
+export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.nvm/versions/node/*/bin:$PATH"
+
+# Check Node.js
+if ! command -v node &>/dev/null; then
+  osascript -e 'display dialog "Node.js is required.\n\nInstall it from https://nodejs.org\nor run: brew install node\n\nThen try again." buttons {"OK"} default button "OK" with icon stop'
+  exit 1
+fi
+
+cd "$APP_DIR"
+
+# Install dependencies if needed
+if [ ! -d "node_modules" ]; then
+  npm install
+fi
+
+# Kill any existing server
+lsof -ti:3000 | xargs kill -9 2>/dev/null
+
+# Start with DeepSeek AI
+DEEPSEEK_API_KEY=sk-4014283e7f61424ab5f1562a124283d4 node server.js &
+sleep 2
+
+open http://localhost:3000
