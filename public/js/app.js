@@ -1,3 +1,17 @@
+// ── Proportional scaling ──
+const DESIGN_W = 1400;
+function rescaleApp() {
+  const app = document.querySelector('.app');
+  const vw = window.innerWidth;
+  const scale = Math.min(vw / DESIGN_W, 1);
+  app.style.transform = scale < 1 ? `scale(${scale})` : '';
+  // Center horizontally
+  const offset = Math.max(0, (vw - DESIGN_W * scale) / 2);
+  app.style.marginLeft = offset + 'px';
+}
+window.addEventListener('resize', rescaleApp);
+rescaleApp();
+
 // ── DOM refs ──
 const audio = document.getElementById('audio');
 const songTitleBig = document.getElementById('songTitleBig');
@@ -256,6 +270,8 @@ async function sendChat() {
   `);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
+  const isChinese = /[一-鿿]/.test(query);
+
   try {
     const res = await fetch('/api/recommend', {
       method: 'POST',
@@ -267,7 +283,15 @@ async function sendChat() {
     document.getElementById(loadingId)?.remove();
 
     if (data.error) {
-      addChatMsg('assistant', `[ERROR] ${data.error}`);
+      // AI not available — fall back to regular search
+      if (data.error.includes('not configured')) {
+        addChatMsg('assistant', isChinese
+          ? 'AI 推荐未配置，为您进行常规搜索...'
+          : 'AI recommendations not set up. Searching normally...');
+        await fallbackSearch(query, loadingId);
+      } else {
+        addChatMsg('assistant', `[ERROR] ${data.error}`);
+      }
       chatStatus.textContent = '';
       chatSendBtn.disabled = false;
       return;
@@ -275,11 +299,10 @@ async function sendChat() {
 
     const tracks = data.tracks || [];
     const aiMsg = data.message || '';
-    const isChinese = /[一-鿿]/.test(query);
     const addedMsg = isChinese ? '已经为您加入到播放列表' : 'Added to your playlist.';
 
     if (!tracks.length) {
-      addChatMsg('assistant', aiMsg ? `${esc(aiMsg)}<br><br>[ No matching tracks. Try another description. ]` : '[ No matching tracks. Try another description. ]');
+      addChatMsg('assistant', aiMsg ? `${esc(aiMsg)}<br><br>[ ${isChinese ? '没有找到匹配歌曲，试试其他描述。' : 'No matching tracks. Try another description.'} ]` : `[ ${isChinese ? '没有找到匹配歌曲，试试其他描述。' : 'No matching tracks. Try another description.'} ]`);
     } else {
       addChatMsg('assistant', `${esc(aiMsg)}<br><br>[ ${addedMsg} — ${tracks.length} tracks ]`);
       playlist = tracks;
@@ -290,10 +313,52 @@ async function sendChat() {
     chatStatus.textContent = '';
   } catch (err) {
     document.getElementById(loadingId)?.remove();
-    addChatMsg('assistant', `[CONNECTION ERROR] ${err.message}`);
+    // Connection error — try fallback search
+    addChatMsg('assistant', isChinese
+      ? 'AI 服务连接失败，尝试常规搜索...'
+      : 'AI service unreachable. Trying regular search...');
+    await fallbackSearch(query, loadingId);
     chatStatus.textContent = '';
   }
   chatSendBtn.disabled = false;
+}
+
+async function fallbackSearch(query) {
+  const isChinese = /[一-鿿]/.test(query);
+  const loadingId = 'loading-' + Date.now();
+  chatMessages.insertAdjacentHTML('beforeend', `
+    <div class="chat-msg assistant" id="${loadingId}">
+      <div class="msg-avatar">AI</div>
+      <div class="msg-bubble"><div class="loading-dots"><span></span><span></span><span></span></div></div>
+    </div>
+  `);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  try {
+    const res = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    document.getElementById(loadingId)?.remove();
+
+    const tracks = data.tracks || [];
+    if (!tracks.length) {
+      addChatMsg('assistant', isChinese
+        ? '没有找到匹配的歌曲，请尝试其他关键词。'
+        : 'No tracks found. Try different keywords.');
+    } else {
+      addChatMsg('assistant', isChinese
+        ? `为您找到 ${tracks.length} 首歌，已加入播放列表。`
+        : `Found ${tracks.length} tracks. Added to your playlist.`);
+      playlist = tracks;
+      currentIndex = -1;
+      renderPlaylist();
+      playTrack(0);
+    }
+  } catch (err) {
+    document.getElementById(loadingId)?.remove();
+    addChatMsg('assistant', isChinese
+      ? '搜索失败，请检查网络连接。'
+      : 'Search failed. Check your connection.');
+  }
 }
 
 function playRecTrack(idx) {
