@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Slash Music</title>
+<script>
+fetch('url.txt')
+  .then(r => r.text())
+  .then(url => { window.location.href = url.trim(); })
+  .catch(() => { document.body.innerHTML = '<h1>Loading...</h1><p>Server is starting up. Please refresh.</p>'; });
+</script>
+</head>
+<body><p>Redirecting to Slash Music...</p></body>
+</html>
