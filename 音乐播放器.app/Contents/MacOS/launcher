@@ -1,28 +1,37 @@
 #!/bin/bash
 APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$APP_DIR"
 
-# Source shell profile for node
-[ -f ~/.zshrc ] && source ~/.zshrc 2>/dev/null
-export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.nvm/versions/node/*/bin:$PATH"
-
-# Check Node.js
-if ! command -v node &>/dev/null; then
-  osascript -e 'display dialog "Node.js is required.\n\nInstall it from https://nodejs.org\nor run: brew install node\n\nThen try again." buttons {"OK"} default button "OK" with icon stop'
-  exit 1
+# ── Find Node.js: use bundled portable first, then system ──
+NODE_BIN=""
+if [ -f "./nodejs/bin/node" ]; then
+  NODE_BIN="./nodejs/bin/node"
+elif command -v node &>/dev/null; then
+  NODE_BIN="node"
+else
+  osascript -e 'display dialog "Node.js is required. Downloading now..." buttons {"OK"} default button "OK"'
+  NODE_VERSION="v24.16.0"
+  ARCH=$(uname -m)
+  [ "$ARCH" = "arm64" ] && NODE_ARCH="arm64" || NODE_ARCH="x64"
+  PKG="node-${NODE_VERSION}-darwin-${NODE_ARCH}.tar.gz"
+  curl -sL "https://nodejs.org/dist/${NODE_VERSION}/${PKG}" -o /tmp/node-portable.tar.gz
+  tar xzf /tmp/node-portable.tar.gz -C "$APP_DIR"
+  mv "$APP_DIR/node-${NODE_VERSION}-darwin-${NODE_ARCH}" "$APP_DIR/nodejs"
+  NODE_BIN="$APP_DIR/nodejs/bin/node"
 fi
 
-cd "$APP_DIR"
+export PATH="$APP_DIR/nodejs/bin:$PATH"
 
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then
-  npm install
+  "$NODE_BIN" "$APP_DIR/nodejs/lib/node_modules/npm/bin/npm-cli.js" install 2>/dev/null || npm install
 fi
 
 # Kill any existing server
 lsof -ti:3000 | xargs kill -9 2>/dev/null
 
 # Start with DeepSeek AI
-DEEPSEEK_API_KEY=sk-4014283e7f61424ab5f1562a124283d4 node server.js &
+DEEPSEEK_API_KEY=sk-4014283e7f61424ab5f1562a124283d4 "$NODE_BIN" server.js &
 sleep 2
 
 open http://localhost:3000
